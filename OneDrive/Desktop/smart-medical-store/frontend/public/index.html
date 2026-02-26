@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>PharmaFlow ERP - Login</title>
+  <link rel="stylesheet" href="style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+
+<body class="login-body">
+
+<div class="login-container">
+
+  <div class="login-left">
+    <h1>🏥 PharmaFlow</h1>
+    <p>Advanced Pharmacy Management System</p>
+    <p style="margin-top: 20px; font-size: 16px; line-height: 1.8;">Streamline your pharmacy operations with intelligent inventory tracking, staff management, and real-time analytics.</p>
+    <div style="margin-top: 30px;">
+      <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
+        <span style="font-size: 24px;">📦</span>
+        <span style="color: #666;">Smart Medicine Locator</span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
+        <span style="font-size: 24px;">👥</span>
+        <span style="color: #666;">Staff Management</span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 12px;">
+        <span style="font-size: 24px;">📊</span>
+        <span style="color: #666;">Real-time Analytics</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="login-card">
+    <h2 id="formTitle">Welcome Back</h2>
+
+    <!-- Login form -->
+    <div id="loginForm">
+      <input id="username" placeholder="Username" autocomplete="username">
+      <input id="password" type="password" placeholder="Password" autocomplete="current-password">
+      <button onclick="login()">Sign In</button>
+      <p id="msg" class="error-msg"></p>
+      <p style="margin-top:16px; font-size:0.95rem; color:#666;">New staff? <a href="#" id="showRegisterLink" onclick="toggleRegister(true);return false;">Register here</a></p>
+    </div>
+
+    <!-- Registration form (hidden by default) -->
+    <div id="registerForm" style="display:none;">
+      <input id="reg_username" placeholder="Choose a username" autocomplete="username">
+      <input id="reg_password" type="password" placeholder="Choose a password" autocomplete="new-password">
+      <input id="reg_confirm" type="password" placeholder="Confirm password" autocomplete="new-password">
+      <button onclick="registerStaff()">Create Account</button>
+      <p id="registerMsg" class="error-msg"></p>
+      <p style="margin-top:16px; font-size:0.95rem; color:#666;">Already have an account? <a href="#" onclick="toggleRegister(false);return false;">Sign in</a></p>
+    </div>
+  </div>
+
+</div>
+
+<script src="script.js"></script>
+</body>
+</html>

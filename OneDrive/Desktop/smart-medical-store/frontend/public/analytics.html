@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Analytics - PharmaFlow</title>
+<link rel="stylesheet" href="style.css">
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+
+<body>
+<div class="layout">
+
+<aside class="sidebar">
+  <div class="brand">PharmaFlow</div>
+  <nav>
+    <a href="admin.html">Dashboard</a>
+    <a class="active">Analytics</a>
+    <a href="index.html" onclick="logout();return false;">Logout</a>
+  </nav>
+</aside>
+
+<main class="main">
+
+  <div class="topbar">
+    <h2>📊 Sales & Business Analytics</h2>
+    <div class="user-card">
+      <span id="adminName">👨‍💼 Admin</span>
+    </div>
+  </div>
+
+  <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:20px; margin-bottom:20px;">
+    <div class="kpi-card">
+      <span>Total Medicines</span>
+      <h3 id="totalMedicines">0</h3>
+    </div>
+    <div class="kpi-card">
+      <span>Total Stock</span>
+      <h3 id="totalStock">0</h3>
+    </div>
+    <div class="kpi-card">
+      <span>Total Staff</span>
+      <h3 id="totalStaff">0</h3>
+    </div>
+  </div>
+
+  <div style="display:grid; grid-template-columns:1fr 1fr; gap:20px;">
+    <div class="panel">
+      <h3>📈 Weekly Sales</h3>
+      <div style="height:300px;">
+        <canvas id="salesChart"></canvas>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h3>📦 Medicine Distribution</h3>
+      <div style="height:300px;">
+        <canvas id="medicineChart"></canvas>
+      </div>
+    </div>
+
+    <div class="panel" style="grid-column:1/-1;">
+      <h3>💼 Staff Analytics</h3>
+      <div id="staffAnalytics" style="padding:20px;"></div>
+    </div>
+  </div>
+
+</main>
+</div>
+
+<script src="script.js"></script>
+
+<script>
+let currentUser = null;
+let salesChart = null;
+let medicineChart = null;
+
+document.addEventListener("DOMContentLoaded", () => {
+  currentUser = verifyRole("admin");
+  if (!currentUser) return;
+  
+  document.getElementById("adminName").innerText = currentUser.name || "Admin";
+  initAnalytics();
+});
+
+async function initAnalytics() {
+  try {
+    const res = await fetch('/analytics');
+    const stat = await res.json();
+
+    // Update KPIs
+    document.getElementById("totalMedicines").innerText = stat.totalMedicines || 0;
+    document.getElementById("totalStock").innerText = stat.totalStock || 0;
+    document.getElementById("totalStaff").innerText = stat.totalStaff || 0;
+
+    // Load staff for analytics
+    loadStaffAnalytics();
+
+    // Initialize charts
+    initSalesChart(stat);
+    initMedicineChart(stat);
+
+  } catch (err) {
+    console.warn('Analytics fetch failed', err);
+  }
+}
+
+function initSalesChart(stat) {
+  const ctx = document.getElementById('salesChart');
+  if (!ctx) return;
+
+  const defaultLabels = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  const defaultData = [2000,1800,2400,2100,2300,2500,1900];
+
+  salesChart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: stat.weeklyLabels || defaultLabels,
+      datasets: [{
+        label: 'Sales (₹)',
+        data: stat.weeklySales || defaultData,
+        backgroundColor: '#2563eb'
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: true }
+      }
+    }
+  });
+}
+
+function initMedicineChart(stat) {
+  const ctx = document.getElementById('medicineChart');
+  if (!ctx) return;
+
+  medicineChart = new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels: ['Available', 'Low Stock', 'Out of Stock'],
+      datasets: [{
+        data: [stat.totalMedicines ? Math.floor(stat.totalMedicines * 0.6) : 0, 
+                stat.totalMedicines ? Math.floor(stat.totalMedicines * 0.3) : 0, 
+                stat.totalMedicines ? Math.floor(stat.totalMedicines * 0.1) : 0],
+        backgroundColor: ['#10b981', '#f59e0b', '#ef4444']
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false
+    }
+  });
+}
+
+async function loadStaffAnalytics() {
+  try {
+    const res = await fetch('/staff');
+    const staff = await res.json();
+    const container = document.getElementById('staffAnalytics');
+
+    if (staff.length === 0) {
+      container.innerHTML = "<p>No staff members</p>";
+      return;
+    }
+
+    let html = `<p><b>Total Active Staff:</b> ${staff.length}</p>`;
+    html += "<table style='width:100%; margin-top:15px; border-collapse:collapse;'>";
+    html += "<tr style='background:#f3f4f6;'><th style='padding:10px; text-align:left; border-bottom:1px solid #ddd;'>Name</th><th style='padding:10px; text-align:left; border-bottom:1px solid #ddd;'>Email</th><th style='padding:10px; text-align:left; border-bottom:1px solid #ddd;'>Phone</th></tr>";
+
+    staff.forEach(s => {
+      html += `<tr style='border-bottom:1px solid #ddd;'>
+        <td style='padding:10px;'>${s.name || "-"}</td>
+        <td style='padding:10px;'>${s.email || "-"}</td>
+        <td style='padding:10px;'>${s.phone || "-"}</td>
+      </tr>`;
+    });
+
+    html += "</table>";
+    container.innerHTML = html;
+  } catch (err) {
+    console.error("Error loading staff analytics", err);
+  }
+}
+</script>
+
+</body>
+</html>

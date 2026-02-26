@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Admin Panel - PharmaFlow</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<div class="layout">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="brand">PharmaFlow</div>
+    <nav>
+      <a class="active" onclick="showTab('dashboard')">Dashboard</a>
+      <a onclick="showTab('staff')">Staff Management</a>
+      <a onclick="showTab('analytics')">Analytics</a>
+      <a href="index.html" onclick="logout();return false;">Logout</a>
+    </nav>
+  </aside>
+
+  <!-- MAIN -->
+  <main class="main">
+
+    <!-- HEADER -->
+    <header class="topbar">
+      <div>
+        <h2 id="pageTitle">👨‍💼 Admin Dashboard</h2>
+        <p class="subtext" id="pageSubtitle">Manage team, inventory & analytics</p>
+      </div>
+      <div class="user-card">
+        <span id="adminName">👨‍💼 Admin</span>
+      </div>
+    </header>
+
+    <!-- TABS -->
+    <div id="tabs" style="margin-bottom:20px; border-bottom:1px solid #e5e7eb; display:flex; gap:20px;">
+      <button onclick="showTab('dashboard')" class="tab-btn active">Dashboard</button>
+      <button onclick="showTab('staff')" class="tab-btn">Staff</button>
+      <button onclick="showTab('analytics')" class="tab-btn">Analytics</button>
+    </div>
+
+    <!-- DASHBOARD TAB -->
+    <div id="dashboardTab" class="tab-content">
+      <div class="grid">
+        <div class="box">
+          <h3>📦 Total Medicines</h3>
+          <p id="dashTotalMed" style="font-size:2em; font-weight:bold;">0</p>
+        </div>
+
+        <div class="box">
+          <h3>📊 Total Stock</h3>
+          <p id="dashTotalStock" style="font-size:2em; font-weight:bold;">0</p>
+        </div>
+
+        <div class="box">
+          <h3>👥 Total Staff</h3>
+          <p id="dashTotalStaff" style="font-size:2em; font-weight:bold;">0</p>
+        </div>
+
+        <div class="box">
+          <h3>⚠️ Low Stock</h3>
+          <button onclick="checkStock()" class="primary-btn">Check Alerts</button>
+          <p id="alert"></p>
+        </div>
+      </div>
+    </div>
+
+    <!-- STAFF TAB -->
+    <div id="staffTab" class="tab-content" style="display:none;">
+      <div class="panel">
+        <h3>Staff Members</h3>
+        <div id="staffList" style="overflow-x:auto;"></div>
+      </div>
+
+      <div class="panel">
+        <h3>Attendance Report (Last 30 Days)</h3>
+        <div id="attendanceReport" style="overflow-x:auto; max-height:500px;"></div>
+      </div>
+    </div>
+
+    <!-- ANALYTICS TAB -->
+    <div id="analyticsTab" class="tab-content" style="display:none;">
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:20px;">
+        <div class="panel">
+          <h3>📈 Sales (Last 7 Days)</h3>
+          <div style="height:300px;">
+            <canvas id="salesChart"></canvas>
+          </div>
+        </div>
+
+        <div class="panel">
+          <h3>📊 Store Analytics</h3>
+          <div id="analyticsSummary" style="padding:20px;"></div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<script src="script.js"></script>
+
+<script>
+let currentUser = null;
+let salesChart = null;
+
+document.addEventListener("DOMContentLoaded", () => {
+  currentUser = verifyRole("admin");
+  if (!currentUser) return;
+  
+  document.getElementById("adminName").innerText = currentUser.name || "Admin";
+  loadDashboard();
+  loadStaff();
+  loadAttendanceReport();
+});
+
+function showTab(tab) {
+  // Hide all tabs
+  document.getElementById("dashboardTab").style.display = "none";
+  document.getElementById("staffTab").style.display = "none";
+  document.getElementById("analyticsTab").style.display = "none";
+  
+  // Show selected tab
+  document.getElementById(tab + "Tab").style.display = "block";
+  
+  // Update tab buttons
+  const btns = document.querySelectorAll(".tab-btn");
+  btns.forEach(b => b.classList.remove("active"));
+  event.target.classList.add("active");
+  
+  // Initialize analytics chart when analytics tab is opened
+  if (tab === "analytics") {
+    setTimeout(() => initAnalyticsChart(), 100);
+  }
+}
+
+async function loadDashboard() {
+  try {
+    const res = await fetch("/analytics");
+    const data = await res.json();
+    document.getElementById("dashTotalMed").innerText = data.totalMedicines || 0;
+    document.getElementById("dashTotalStock").innerText = data.totalStock || 0;
+    document.getElementById("dashTotalStaff").innerText = data.totalStaff || 0;
+  } catch (err) {
+    console.error("Error loading dashboard", err);
+  }
+}
+
+async function loadStaff() {
+  try {
+    const res = await fetch("/staff");
+    const staff = await res.json();
+    const list = document.getElementById("staffList");
+    
+    if (staff.length === 0) {
+      list.innerHTML = "<p>No staff members</p>";
+      return;
+    }
+    
+    let html = "<table style='width:100%; border-collapse:collapse;'>";
+    html += "<tr style='background:#f3f4f6; font-weight:bold;'><th style='padding:10px; text-align:left; border-bottom:1px solid #ddd;'>Name</th><th style='padding:10px; text-align:left; border-bottom:1px solid #ddd;'>Username</th><th style='padding:10px; text-align:left; border-bottom:1px solid #ddd;'>Email</th><th style='padding:10px; text-align:left; border-bottom:1px solid #ddd;'>Phone</th><th style='padding:10px; text-align:left; border-bottom:1px solid #ddd;'>Joined</th></tr>";
+    
+    staff.forEach(s => {
+      const date = new Date(s.created_at).toLocaleDateString();
+      html += `<tr style='border-bottom:1px solid #ddd;'>
+        <td style='padding:10px;'>${s.name || "-"}</td>
+        <td style='padding:10px;'>${s.username}</td>
+        <td style='padding:10px;'>${s.email || "-"}</td>
+        <td style='padding:10px;'>${s.phone || "-"}</td>
+        <td style='padding:10px;'>${date}</td>
+      </tr>`;
+    });
+    
+    html += "</table>";
+    list.innerHTML = html;
+  } catch (err) {
+    console.error("Error loading staff", err);
+    document.getElementById("staffList").innerHTML = "<p>Failed to load staff</p>";
+  }
+}
+
+async function loadAttendanceReport() {
+  try {
+    const res = await fetch("/attendance-report/all");
+    const records = await res.json();
+    const report = document.getElementById("attendanceReport");
+    
+    if (records.length === 0) {
+      report.innerHTML = "<p>No attendance records</p>";
+      return;
+    }
+    
+    let html = "<table style='width:100%; border-collapse:collapse;'>";
+    html += "<tr style='background:#f3f4f6; font-weight:bold;'><th style='padding:10px; text-align:left; border-bottom:1px solid #ddd;'>Staff</th><th style='padding:10px; text-align:left; border-bottom:1px solid #ddd;'>Date</th><th style='padding:10px; text-align:left; border-bottom:1px solid #ddd;'>Status</th><th style='padding:10px; text-align:left; border-bottom:1px solid #ddd;'>Check In</th><th style='padding:10px; text-align:left; border-bottom:1px solid #ddd;'>Check Out</th></tr>";
+    
+    records.forEach(r => {
+      const date = new Date(r.date).toLocaleDateString();
+      const checkIn = r.check_in ? new Date(r.check_in).toLocaleTimeString() : "-";
+      const checkOut = r.check_out ? new Date(r.check_out).toLocaleTimeString() : "-";
+      const statusColor = r.status === "present" ? "#10b981" : (r.status === "absent" ? "#ef4444" : "#f59e0b");
+      
+      html += `<tr style='border-bottom:1px solid #ddd;'>
+        <td style='padding:10px;'>${r.username}</td>
+        <td style='padding:10px;'>${date}</td>
+        <td style='padding:10px; color:${statusColor}; font-weight:bold;'>${r.status}</td>
+        <td style='padding:10px;'>${checkIn}</td>
+        <td style='padding:10px;'>${checkOut}</td>
+      </tr>`;
+    });
+    
+    html += "</table>";
+    report.innerHTML = html;
+  } catch (err) {
+    console.error("Error loading attendance report", err);
+    document.getElementById("attendanceReport").innerHTML = "<p>Failed to load attendance report</p>";
+  }
+}
+
+async function initAnalyticsChart() {
+  const ctx = document.getElementById('salesChart');
+  if (!ctx) return;
+  
+  const defaultLabels = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  const defaultData = [2000,1800,2400,2100,2300,2500,1900];
+
+  if (salesChart) {
+    salesChart.destroy();
+  }
+
+  salesChart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: defaultLabels,
+      datasets: [{
+        label: 'Sales',
+        data: defaultData,
+        backgroundColor: '#2563eb'
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false
+    }
+  });
+
+  try {
+    const res = await fetch('/analytics');
+    const stat = await res.json();
+
+    // Update summary
+    const summary = document.getElementById('analyticsSummary');
+    if (summary) {
+      summary.innerHTML = `
+        <div style="margin-bottom:15px;"><b>Total Medicines:</b> ${stat.totalMedicines || 0}</div>
+        <div style="margin-bottom:15px;"><b>Total Stock Units:</b> ${stat.totalStock || 0}</div>
+        <div style="margin-bottom:15px;"><b>Total Staff:</b> ${stat.totalStaff || 0}</div>
+      `;
+    }
+
+    // Update chart with actual data
+    if (Array.isArray(stat.weeklySales) && stat.weeklySales.length) {
+      salesChart.data.labels = stat.weeklyLabels || defaultLabels;
+      salesChart.data.datasets[0].data = stat.weeklySales;
+      salesChart.update();
+    }
+  } catch (err) {
+    console.warn('Analytics fetch failed', err);
+  }
+}
+
+async function checkStock() {
+  try {
+    const res = await fetch("/low-stock");
+    const items = await res.json();
+    const alert = document.getElementById("alert");
+    
+    if (items.length === 0) {
+      alert.innerHTML = "<p style='color:#10b981;'>✓ All items have sufficient stock</p>";
+      return;
+    }
+    
+    let html = "<p style='color:#ef4444;'>⚠ Low Stock Items:</p><ul>";
+    items.forEach(item => {
+      html += `<li>${item.name} - ${item.quantity} units</li>`;
+    });
+    html += "</ul>";
+    alert.innerHTML = html;
+  } catch (err) {
+    alert.innerHTML = "<p>Error loading stock data</p>";
+  }
+}
+</script>
+
+</body>
+</html>
