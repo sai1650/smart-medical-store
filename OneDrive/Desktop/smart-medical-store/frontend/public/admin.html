@@ -179,6 +179,7 @@ function showTab(tab) {
   document.getElementById("staffTab").style.display = "none";
   document.getElementById("attendanceTab").style.display = "none";
   document.getElementById("analyticsTab").style.display = "none";
+  document.getElementById("inventoryTab").style.display = "none";
   
   // Show selected tab
   document.getElementById(tab + "Tab").style.display = "block";
@@ -370,8 +371,18 @@ async function loadAttendanceStaff() {
     const staff = await res.json();
     const select = document.getElementById("staffSelect");
     
+    if (!select) {
+      console.error("Staff select element not found");
+      return;
+    }
+    
     // Clear existing options except the placeholder
     select.innerHTML = '<option value="">-- Choose a staff member --</option>';
+    
+    if (!Array.isArray(staff) || staff.length === 0) {
+      select.innerHTML += '<option value="">No staff members available</option>';
+      return;
+    }
     
     staff.forEach(s => {
       const option = document.createElement("option");
@@ -381,6 +392,10 @@ async function loadAttendanceStaff() {
     });
   } catch (err) {
     console.error("Error loading staff for attendance", err);
+    const select = document.getElementById("staffSelect");
+    if (select) {
+      select.innerHTML = '<option value="">Error loading staff</option>';
+    }
   }
 }
 
@@ -431,11 +446,21 @@ async function markStaffAttendance(status) {
 async function loadTodayAttendanceSummary() {
   try {
     const res = await fetch("/attendance-report/today");
+    
+    if (!res.ok) {
+      throw new Error(`HTTP error! status: ${res.status}`);
+    }
+    
     const records = await res.json();
     const summary = document.getElementById("todayAttendanceSummary");
     
-    if (records.length === 0) {
-      summary.innerHTML = "<p>No attendance records for today yet</p>";
+    if (!summary) {
+      console.error("Attendance summary element not found");
+      return;
+    }
+    
+    if (!Array.isArray(records) || records.length === 0) {
+      summary.innerHTML = "<p style='color:#999;'>No attendance records for today yet</p>";
       return;
     }
     
@@ -457,6 +482,10 @@ async function loadTodayAttendanceSummary() {
     summary.innerHTML = html;
   } catch (err) {
     console.error("Error loading today's attendance", err);
+    const summary = document.getElementById("todayAttendanceSummary");
+    if (summary) {
+      summary.innerHTML = "<p style='color:#ef4444;'>Error loading attendance data</p>";
+    }
   }
 }
 </script>
