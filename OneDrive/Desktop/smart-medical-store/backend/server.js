@@ -450,12 +450,13 @@ app.post("/attendance/mark", async (req, res) => {
     
     const today = new Date();
     const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0, 0);
+    const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59, 999);
     
-    console.log("Querying for user_id:", userId, "date:", startOfDay);
+    console.log("Querying for user_id:", userId, "date range:", startOfDay, "to", endOfDay);
     
     let attendance = await Attendance.findOne({
       user_id: userId,
-      date: startOfDay
+      date: { $gte: startOfDay, $lte: endOfDay }
     });
     
     console.log("Existing attendance found:", !!attendance);
@@ -494,10 +495,11 @@ app.post("/attendance/checkin", async (req, res) => {
     
     const today = new Date();
     const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0, 0);
+    const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59, 999);
     
     let attendance = await Attendance.findOne({
       user_id: new mongoose.Types.ObjectId(user_id),
-      date: startOfDay
+      date: { $gte: startOfDay, $lte: endOfDay }
     });
     
     if (attendance) {
@@ -528,9 +530,10 @@ app.post("/attendance/checkout", async (req, res) => {
     
     const today = new Date();
     const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0, 0);
+    const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59, 999);
     
     const attendance = await Attendance.findOneAndUpdate(
-      { user_id: new mongoose.Types.ObjectId(user_id), date: startOfDay },
+      { user_id: new mongoose.Types.ObjectId(user_id), date: { $gte: startOfDay, $lte: endOfDay } },
       { check_out: new Date() },
       { new: true }
     );
@@ -546,10 +549,11 @@ app.get("/attendance/:user_id/today", async (req, res) => {
   try {
     const today = new Date();
     const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0, 0);
+    const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59, 999);
     
     const attendance = await Attendance.findOne({
       user_id: new mongoose.Types.ObjectId(req.params.user_id),
-      date: startOfDay
+      date: { $gte: startOfDay, $lte: endOfDay }
     });
     
     if (attendance) {
