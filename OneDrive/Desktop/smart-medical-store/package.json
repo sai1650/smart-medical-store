@@ -1,0 +1,14 @@
+{
+  "name": "smart-medical-store-root",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "start": "node backend/server.js",
+    "start:backend": "node backend/server.js",
+    "start:frontend": "npx serve frontend/public || echo 'Install serve or use Vercel'",
+    "clean": "echo clean"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

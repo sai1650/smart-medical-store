@@ -423,7 +423,54 @@ app.put("/staff/:id/profile", async (req, res) => {
 
 // ==================== ATTENDANCE ====================
 
-// CHECK IN / MARK ATTENDANCE
+// MARK ATTENDANCE (from admin)
+app.post("/attendance/mark", async (req, res) => {
+  try {
+    const { user_id, status } = req.body;
+    
+    if (!user_id || !status) {
+      return res.status(400).json({ success: false, message: "Missing required fields" });
+    }
+    
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    // Get user info for username
+    const user = await User.findById(user_id);
+    if (!user) {
+      return res.status(404).json({ success: false, message: "User not found" });
+    }
+    
+    let attendance = await Attendance.findOne({
+      user_id,
+      date: { $gte: today }
+    });
+    
+    if (attendance) {
+      // Update existing record
+      attendance.status = status;
+      attendance.check_in = new Date();
+      await attendance.save();
+    } else {
+      // Create new record
+      attendance = new Attendance({
+        user_id,
+        username: user.username,
+        date: today,
+        status: status,
+        check_in: new Date()
+      });
+      await attendance.save();
+    }
+    
+    res.json({ success: true, message: "Attendance marked successfully", attendance });
+  } catch (err) {
+    console.error("Attendance marking error:", err);
+    res.status(500).json({ success: false, message: "Failed to mark attendance" });
+  }
+});
+
+// CHECK IN / MARK ATTENDANCE (from staff - DEPRECATED, now admin only)
 app.post("/attendance/checkin", async (req, res) => {
   try {
     const { user_id, username, status } = req.body;
@@ -477,12 +524,57 @@ app.post("/attendance/checkout", async (req, res) => {
   }
 });
 
+// GET TODAY'S ATTENDANCE (for staff - to check if attendance marked)
+app.get("/attendance/:user_id/today", async (req, res) => {
+  try {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    const attendance = await Attendance.findOne({
+      user_id: req.params.user_id,
+      date: { $gte: today }
+    });
+    
+    if (attendance) {
+      res.json({
+        marked: true,
+        status: attendance.status,
+        timestamp: attendance.check_in || new Date()
+      });
+    } else {
+      res.json({
+        marked: false,
+        status: null,
+        timestamp: null
+      });
+    }
+  } catch (err) {
+    res.status(500).json({ marked: false });
+  }
+});
+
 // GET STAFF ATTENDANCE RECORDS
 app.get("/attendance/:user_id", async (req, res) => {
   try {
     const records = await Attendance.find({ user_id: req.params.user_id })
       .sort({ date: -1 })
       .limit(30);
+    res.json(records);
+  } catch (err) {
+    res.status(500).json([]);
+  }
+});
+
+// GET TODAY'S ATTENDANCE REPORT (for admin)
+app.get("/attendance-report/today", async (req, res) => {
+  try {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    const records = await Attendance.find({
+      date: { $gte: today }
+    }).sort({ check_in: -1 });
+    
     res.json(records);
   } catch (err) {
     res.status(500).json([]);

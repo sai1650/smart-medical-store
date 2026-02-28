@@ -99,17 +99,14 @@
     <!-- ATTENDANCE TAB -->
     <div id="attendanceTab" class="tab-content" style="display:none;">
       <div class="panel">
-        <h3>Daily Attendance</h3>
-        <div style="margin:20px 0;">
-          <button onclick="markAttendance('present')" class="primary-btn" style="margin-right:10px;">✓ Mark Present</button>
-          <button onclick="markAttendance('absent')" class="secondary-btn" style="margin-right:10px;">✗ Mark Absent</button>
-          <button onclick="checkOut()" class="secondary-btn">Check Out</button>
+        <h3>📋 Your Attendance Status</h3>
+        <div id="todayAttendanceStatus" style="padding:20px; text-align:center; font-size:1.2em;">
+          <p>Waiting for admin to mark attendance...</p>
         </div>
-        <p id="attendanceMsg"></p>
       </div>
 
       <div class="panel">
-        <h3>Attendance History (Last 30 days)</h3>
+        <h3>📅 Attendance History (Last 30 days)</h3>
         <div id="attendanceList" style="max-height:400px; overflow-y:auto;"></div>
       </div>
     </div>
@@ -161,6 +158,9 @@ document.addEventListener("DOMContentLoaded", () => {
       if (e.key === "Enter") searchMed();
     });
   }
+  
+  // Listen for attendance notifications from admin
+  startAttendanceListener();
 });
 
 function showTab(tab) {
@@ -224,44 +224,89 @@ async function updateProfile() {
   }
 }
 
-async function markAttendance(status) {
-  if (!currentUser) return;
-  const msg = document.getElementById("attendanceMsg");
-  
-  try {
-    const res = await fetch("/attendance/checkin", {
-      method: "POST",
-      headers: {"Content-Type":"application/json"},
-      body: JSON.stringify({
-        user_id: currentUser._id,
-        username: currentUser.username,
-        status: status
-      })
-    });
-    const data = await res.json();
-    msg.innerText = `✓ Marked as ${status}`;
-    loadAttendance();
-  } catch (err) {
-    msg.innerText = "✗ Failed to mark attendance";
-  }
+// Listen for attendance notifications from admin
+function startAttendanceListener() {
+  // Check for attendance updates every 5 seconds
+  setInterval(async () => {
+    if (!currentUser) return;
+    try {
+      const res = await fetch(`/attendance/${currentUser._id}/today`);
+      const data = await res.json();
+      
+      if (data.marked) {
+        const status = data.status;
+        const statusColor = status === "present" ? "#10b981" : (status === "absent" ? "#ef4444" : "#f59e0b");
+        
+        // Update UI
+        const statusDiv = document.getElementById("todayAttendanceStatus");
+        if (statusDiv) {
+          statusDiv.innerHTML = `<p style="color:${statusColor}; font-weight:bold; font-size:1.5em;">✓ Attendance Marked: <span style="text-transform:uppercase;">${status}</span></p>
+            <p style="color:#666; margin-top:10px;">Marked at: ${new Date(data.timestamp).toLocaleTimeString()}</p>`;
+        }
+        
+        // Show popup notification
+        showAttendancePopup(status);
+        
+        // Reload attendance list
+        loadAttendance();
+      }
+    } catch (err) {
+      console.log("Checking attendance...");
+    }
+  }, 5000);
 }
 
-async function checkOut() {
-  if (!currentUser) return;
-  const msg = document.getElementById("attendanceMsg");
+function showAttendancePopup(status) {
+  const statusColor = status === "present" ? "#10b981" : (status === "absent" ? "#ef4444" : "#f59e0b");
+  const statusIcon = status === "present" ? "✓" : "✗";
   
-  try {
-    const res = await fetch("/attendance/checkout", {
-      method: "POST",
-      headers: {"Content-Type":"application/json"},
-      body: JSON.stringify({ user_id: currentUser._id })
-    });
-    const data = await res.json();
-    msg.innerText = "✓ Checked out successfully";
-    loadAttendance();
-  } catch (err) {
-    msg.innerText = "✗ Failed to check out";
-  }
+  const popup = document.createElement("div");
+  popup.style.cssText = `
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    background: white;
+    border-left: 5px solid ${statusColor};
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    z-index: 10000;
+    min-width: 300px;
+    animation: slideIn 0.3s ease;
+  `;
+  
+  popup.innerHTML = `
+    <div style="color:${statusColor}; font-weight:bold; font-size:1.3em; margin-bottom:10px;">
+      ${statusIcon} Attendance Marked
+    </div>
+    <div style="color:#666; font-size:1.1em; text-transform:uppercase;">
+      Status: ${status}
+    </div>
+    <p style="color:#999; font-size:0.9em; margin-top:10px;">
+      Admin has recorded your attendance
+    </p>
+  `;
+  
+  document.body.appendChild(popup);
+  
+  // Add animation styles
+  const style = document.createElement("style");
+  style.textContent = `
+    @keyframes slideIn {
+      from {
+        transform: translateX(400px);
+        opacity: 0;
+      }
+      to {
+        transform: translateX(0);
+        opacity: 1;
+      }
+    }
+  `;
+  document.head.appendChild(style);
+  
+  // Auto-remove after 5 seconds
+  setTimeout(() => popup.remove(), 5000);
 }
 
 async function loadAttendance() {

@@ -16,6 +16,7 @@
     <nav>
       <a class="active" onclick="showTab('dashboard')">Dashboard</a>
       <a onclick="showTab('staff')">Staff Management</a>
+      <a onclick="showTab('attendance')">Mark Attendance</a>
       <a onclick="showTab('analytics')">Analytics</a>
       <a href="index.html" onclick="logout();return false;">Logout</a>
     </nav>
@@ -39,6 +40,7 @@
     <div id="tabs" style="margin-bottom:20px; border-bottom:1px solid #e5e7eb; display:flex; gap:20px;">
       <button onclick="showTab('dashboard')" class="tab-btn active">Dashboard</button>
       <button onclick="showTab('staff')" class="tab-btn">Staff</button>
+      <button onclick="showTab('attendance')" class="tab-btn">Mark Attendance</button>
       <button onclick="showTab('analytics')" class="tab-btn">Analytics</button>
       <button onclick="showTab('inventory')" class="tab-btn">Inventory</button>
     </div>
@@ -99,6 +101,36 @@
       </div>
     </div>
 
+    <!-- ATTENDANCE TAB -->
+    <div id="attendanceTab" class="tab-content" style="display:none;">
+      <div class="panel">
+        <h3>Mark Staff Attendance</h3>
+        
+        <div style="margin-bottom:20px;">
+          <label style="display:block; margin-bottom:10px; font-weight:bold;">Select Staff Member:</label>
+          <select id="staffSelect" style="width:100%; padding:10px; border:1px solid #ddd; border-radius:5px; font-size:1em;">
+            <option value="">-- Choose a staff member --</option>
+          </select>
+        </div>
+
+        <div style="margin-bottom:20px;">
+          <label style="display:block; margin-bottom:10px; font-weight:bold;">Attendance Status:</label>
+          <div style="display:flex; gap:10px;">
+            <button onclick="markStaffAttendance('present')" class="primary-btn" style="flex:1;">✓ Mark Present</button>
+            <button onclick="markStaffAttendance('absent')" class="secondary-btn" style="flex:1;">✗ Mark Absent</button>
+            <button onclick="markStaffAttendance('leave')" class="secondary-btn" style="flex:1;">📅 Mark Leave</button>
+          </div>
+        </div>
+
+        <p id="attendanceMarkMsg" style="margin-top:10px; font-weight:bold;"></p>
+      </div>
+
+      <div class="panel">
+        <h3>Today's Attendance Summary</h3>
+        <div id="todayAttendanceSummary" style="overflow-x:auto;"></div>
+      </div>
+    </div>
+
     <!-- INVENTORY TAB -->
     <div id="inventoryTab" class="tab-content" style="display:none;">
       <div class="panel">
@@ -145,6 +177,7 @@ function showTab(tab) {
   // Hide all tabs
   document.getElementById("dashboardTab").style.display = "none";
   document.getElementById("staffTab").style.display = "none";
+  document.getElementById("attendanceTab").style.display = "none";
   document.getElementById("analyticsTab").style.display = "none";
   
   // Show selected tab
@@ -165,6 +198,11 @@ function showTab(tab) {
     // ensure add panel hidden
     const panel = document.getElementById('addMedPanel');
     if(panel) panel.style.display = 'none';
+  }
+  // load attendance staff when requested
+  if (tab === "attendance") {
+    loadAttendanceStaff();
+    loadTodayAttendanceSummary();
   }
 }
 
@@ -321,6 +359,104 @@ async function checkStock() {
     alert.innerHTML = html;
   } catch (err) {
     alert.innerHTML = "<p>Error loading stock data</p>";
+  }
+}
+
+// ==================== ATTENDANCE FUNCTIONS ====================
+
+async function loadAttendanceStaff() {
+  try {
+    const res = await fetch("/staff");
+    const staff = await res.json();
+    const select = document.getElementById("staffSelect");
+    
+    // Clear existing options except the placeholder
+    select.innerHTML = '<option value="">-- Choose a staff member --</option>';
+    
+    staff.forEach(s => {
+      const option = document.createElement("option");
+      option.value = s._id;
+      option.textContent = `${s.name || s.username} (${s.username})`;
+      select.appendChild(option);
+    });
+  } catch (err) {
+    console.error("Error loading staff for attendance", err);
+  }
+}
+
+async function markStaffAttendance(status) {
+  const staffSelect = document.getElementById("staffSelect");
+  const staffId = staffSelect.value;
+  const msg = document.getElementById("attendanceMarkMsg");
+  
+  if (!staffId) {
+    msg.style.color = "#ef4444";
+    msg.innerText = "✗ Please select a staff member first";
+    return;
+  }
+  
+  try {
+    const res = await fetch("/attendance/mark", {
+      method: "POST",
+      headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({
+        user_id: staffId,
+        status: status
+      })
+    });
+    
+    const data = await res.json();
+    
+    if (data.success) {
+      msg.style.color = "#10b981";
+      msg.innerText = `✓ Attendance marked as ${status}`;
+      staffSelect.value = "";
+      
+      // Reload today's summary
+      setTimeout(() => {
+        loadTodayAttendanceSummary();
+        msg.innerText = "";
+      }, 2000);
+    } else {
+      msg.style.color = "#ef4444";
+      msg.innerText = `✗ ${data.message || "Failed to mark attendance"}`;
+    }
+  } catch (err) {
+    msg.style.color = "#ef4444";
+    msg.innerText = "✗ Error marking attendance";
+    console.error("Error:", err);
+  }
+}
+
+async function loadTodayAttendanceSummary() {
+  try {
+    const res = await fetch("/attendance-report/today");
+    const records = await res.json();
+    const summary = document.getElementById("todayAttendanceSummary");
+    
+    if (records.length === 0) {
+      summary.innerHTML = "<p>No attendance records for today yet</p>";
+      return;
+    }
+    
+    let html = "<table style='width:100%; border-collapse:collapse;'>";
+    html += "<tr style='background:#f3f4f6; font-weight:bold;'><th style='padding:10px; text-align:left; border-bottom:1px solid #ddd;'>Staff</th><th style='padding:10px; text-align:left; border-bottom:1px solid #ddd;'>Status</th><th style='padding:10px; text-align:left; border-bottom:1px solid #ddd;'>Time</th></tr>";
+    
+    records.forEach(r => {
+      const time = r.check_in ? new Date(r.check_in).toLocaleTimeString() : "-";
+      const statusColor = r.status === "present" ? "#10b981" : (r.status === "absent" ? "#ef4444" : "#f59e0b");
+      
+      html += `<tr style='border-bottom:1px solid #ddd;'>
+        <td style='padding:10px;'>${r.username}</td>
+        <td style='padding:10px; color:${statusColor}; font-weight:bold;'>${r.status}</td>
+        <td style='padding:10px;'>${time}</td>
+      </tr>`;
+    });
+    
+    html += "</table>";
+    summary.innerHTML = html;
+  } catch (err) {
+    console.error("Error loading today's attendance", err);
   }
 }
 </script>
