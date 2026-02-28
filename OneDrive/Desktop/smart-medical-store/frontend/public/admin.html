@@ -40,6 +40,7 @@
       <button onclick="showTab('dashboard')" class="tab-btn active">Dashboard</button>
       <button onclick="showTab('staff')" class="tab-btn">Staff</button>
       <button onclick="showTab('analytics')" class="tab-btn">Analytics</button>
+      <button onclick="showTab('inventory')" class="tab-btn">Inventory</button>
     </div>
 
     <!-- DASHBOARD TAB -->
@@ -98,6 +99,29 @@
       </div>
     </div>
 
+    <!-- INVENTORY TAB -->
+    <div id="inventoryTab" class="tab-content" style="display:none;">
+      <div class="panel">
+        <h3>Inventory</h3>
+        <button class="primary-btn" onclick="showAddMedicineForm()">+ Add New Medicine</button>
+        <div id="inventoryList" style="overflow-x:auto; margin-top:10px;"></div>
+      </div>
+      <div id="addMedPanel" class="panel" style="display:none; margin-top:20px;">
+        <h3>Add Medicine</h3>
+        <form id="addMedForm" onsubmit="return submitNewMedicine(event)">
+          <div><input type="text" id="med_name" placeholder="Name" required></div>
+          <div><input type="text" id="med_company" placeholder="Company"></div>
+          <div><input type="number" id="med_price" placeholder="Price"></div>
+          <div><input type="number" id="med_quantity" placeholder="Quantity"></div>
+          <div><input type="text" id="med_rack" placeholder="Rack"></div>
+          <div><input type="text" id="med_shelf" placeholder="Shelf"></div>
+          <div><button class="primary-btn" type="submit">Save</button>
+              <button type="button" class="secondary-btn" onclick="hideAddMedicineForm()">Cancel</button></div>
+          <div id="addMedMsg"></div>
+        </form>
+      </div>
+    </div>
+
   </main>
 </div>
 
@@ -134,6 +158,13 @@ function showTab(tab) {
   // Initialize analytics chart when analytics tab is opened
   if (tab === "analytics") {
     setTimeout(() => initAnalyticsChart(), 100);
+  }
+  // load inventory when requested
+  if (tab === "inventory") {
+    loadInventory();
+    // ensure add panel hidden
+    const panel = document.getElementById('addMedPanel');
+    if(panel) panel.style.display = 'none';
   }
 }
 

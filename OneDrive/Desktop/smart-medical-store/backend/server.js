@@ -5,10 +5,15 @@ require("dotenv").config();
 
 const app = express();
 
+const path = require('path');
+
 // Middleware
 app.use(cors());
 app.use(express.json());
-app.use(express.static("../frontend/public"));
+
+// Serve frontend static files (resolve absolute path)
+const frontendStatic = path.join(__dirname, '..', 'frontend', 'public');
+app.use(express.static(frontendStatic));
 
 // MongoDB Connection
 mongoose.connect(process.env.MONGODB_URI || "mongodb://localhost:27017/smart_medical_store")
@@ -28,6 +33,9 @@ const userSchema = new mongoose.Schema({
   name: String,
   email: String,
   phone: String,
+  // fields used for password reset via OTP
+  resetOTP: Number,
+  otpExpiry: Date,
   created_at: { type: Date, default: Date.now }
 });
 
@@ -89,6 +97,64 @@ app.post("/login", async (req, res) => {
     } else {
       res.json({ message: "Invalid login" });
     }
+  } catch (err) {
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+// FORGOT PASSWORD - generate and "send" OTP
+app.post("/forgot-password", async (req, res) => {
+  try {
+    const { username } = req.body;
+    if (!username) {
+      return res.status(400).json({ message: "Username required" });
+    }
+
+    const user = await User.findOne({ username });
+    if (!user) {
+      // don't reveal existence of account
+      return res.json({ success: true, message: "If that user exists an OTP has been sent." });
+    }
+
+    const otp = Math.floor(100000 + Math.random() * 900000); // 6-digit
+    user.resetOTP = otp;
+    user.otpExpiry = new Date(Date.now() + 5 * 60 * 1000); // valid for 5min
+    await user.save();
+
+    // In real app we would send email or SMS. For now return it for dev.
+    res.json({ success: true, message: "OTP generated", otp });
+  } catch (err) {
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+// RESET PASSWORD using OTP
+app.post("/reset-password", async (req, res) => {
+  try {
+    const { username, otp, newPassword } = req.body;
+    if (!username || !otp || !newPassword) {
+      return res.status(400).json({ message: "All fields required" });
+    }
+
+    const user = await User.findOne({ username });
+    if (!user || !user.resetOTP || !user.otpExpiry) {
+      return res.status(400).json({ message: "Invalid request" });
+    }
+
+    if (user.otpExpiry < new Date()) {
+      return res.status(400).json({ message: "OTP expired" });
+    }
+
+    if (Number(otp) !== user.resetOTP) {
+      return res.status(400).json({ message: "Incorrect OTP" });
+    }
+
+    user.password = newPassword;
+    user.resetOTP = undefined;
+    user.otpExpiry = undefined;
+    await user.save();
+
+    res.json({ success: true, message: "Password updated" });
   } catch (err) {
     res.status(500).json({ message: "Server error" });
   }
@@ -181,6 +247,22 @@ app.get("/analytics", async (req, res) => {
   }
 });
 
+// DEBUG: show top medicines and types (temporary)
+app.get('/debug-stock', async (req, res) => {
+  try {
+    const totalMedicines = await Medicine.countDocuments();
+    const medicines = await Medicine.find().sort({ quantity: -1 }).limit(50);
+
+    // include type info for quantity fields
+    const meds = medicines.map(m => ({ id: m._id, name: m.name, quantity: m.quantity, qtyType: typeof m.quantity }));
+
+    res.json({ totalMedicines, topByQuantity: meds });
+  } catch (err) {
+    console.error('Debug-stock error', err);
+    res.status(500).json({ error: 'debug failed' });
+  }
+});
+
 // BILLING - Generate bill and update stock
 app.post("/billing", async (req, res) => {
   try {
@@ -247,6 +329,58 @@ app.get("/company/:name", async (req, res) => {
     res.json(medicines);
   } catch (err) {
     res.status(500).json([]);
+  }
+});
+
+// ROUTES FOR MEDICINE MANAGEMENT
+
+// Get all medicines (with optional limit)
+app.get('/medicines', async (req, res) => {
+  try {
+    const meds = await Medicine.find().sort({ name: 1 });
+    res.json(meds);
+  } catch (err) {
+    console.error('Fetch medicines error', err);
+    res.status(500).json([]);
+  }
+});
+
+// Create a new medicine record
+app.post('/medicines', async (req, res) => {
+  try {
+    const { name, company, price, quantity, rack, shelf } = req.body;
+    if (!name) {
+      return res.status(400).json({ message: 'Name required' });
+    }
+    const newMed = new Medicine({ name, company, price: price || 0, quantity: quantity || 0, rack, shelf });
+    await newMed.save();
+    res.json({ success: true, medicine: newMed });
+  } catch (err) {
+    console.error('Create medicine error', err);
+    res.status(500).json({ message: 'Failed to create medicine' });
+  }
+});
+
+// Increase stock for a medicine by id (body: { amount: <number> })
+app.post('/medicines/:id/increase', async (req, res) => {
+  try {
+    const amount = Number(req.body.amount);
+    if (!amount || isNaN(amount)) {
+      return res.status(400).json({ message: 'Invalid amount' });
+    }
+
+    const medicine = await Medicine.findByIdAndUpdate(
+      req.params.id,
+      { $inc: { quantity: amount } },
+      { new: true }
+    );
+
+    if (!medicine) return res.status(404).json({ message: 'Medicine not found' });
+
+    res.json({ success: true, medicine });
+  } catch (err) {
+    console.error('Increase stock error', err);
+    res.status(500).json({ message: 'Failed to increase stock' });
   }
 });
 
@@ -398,7 +532,7 @@ app.get("/bills/:id", async (req, res) => {
 
 // SERVE HOMEPAGE
 app.get("/", (req, res) => {
-  res.sendFile(__dirname + "/public/index.html");
+  res.sendFile(path.join(frontendStatic, 'index.html'));
 });
 
 // ==================== SEED DATA ====================

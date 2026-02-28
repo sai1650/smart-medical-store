@@ -1,4 +1,4 @@
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", (ploy ) => {
 
   // ===== SEARCH BUTTON =====
   const btn = document.getElementById("searchBtn");
@@ -109,6 +109,8 @@ function togglePassword(){
 
 // ====== REGISTER STAFF ======
 function toggleRegister(show){
+  // hide any other flows first
+  hideAllForms();
   const login = document.getElementById('loginForm');
   const reg = document.getElementById('registerForm');
   const title = document.getElementById('formTitle');
@@ -161,6 +163,99 @@ async function registerStaff(){
     if(msg) msg.innerText = 'Server error — try again';
   }
 }
+
+// ===== FORGOT/RESET PASSWORD =====
+function hideAllForms(){
+  ['loginForm','registerForm','forgotForm','resetForm'].forEach(id => {
+    const el = document.getElementById(id);
+    if(el) el.style.display = 'none';
+  });
+  const title = document.getElementById('formTitle');
+  if(title) title.innerText = 'Sign In';
+}
+
+function showForgotForm(){
+  hideAllForms();
+  const form = document.getElementById('forgotForm');
+  if(form) form.style.display = 'block';
+  const title = document.getElementById('formTitle');
+  if(title) title.innerText = 'Forgot Password';
+}
+
+function toggleReset(show){
+  hideAllForms();
+  const form = document.getElementById('resetForm');
+  if(form) form.style.display = show ? 'block' : 'none';
+  const title = document.getElementById('formTitle');
+  if(title) title.innerText = show ? 'Reset Password' : 'Sign In';
+}
+
+async function sendOTP(){
+  const username = document.getElementById('forgot_username').value.trim();
+  const msgEl = document.getElementById('forgotMsg');
+  if(msgEl) msgEl.innerText = '';
+  if(!username){
+    if(msgEl) msgEl.innerText = 'Provide your username';
+    return;
+  }
+
+  try{
+    const res = await fetch('/forgot-password',{
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ username })
+    });
+    const data = await res.json();
+    if(!res.ok){
+      if(msgEl) msgEl.innerText = data.message || 'Error';
+      return;
+    }
+
+    // show otp to user for now (in production this would go to email/sms)
+    if(msgEl) msgEl.innerText = data.message + (data.otp ? ` (OTP: ${data.otp})` : '');
+    // switch to reset form
+    setTimeout(() => {
+      document.getElementById('reset_username').value = username;
+      toggleReset(true);
+    }, 1500);
+
+  }catch(err){
+    if(msgEl) msgEl.innerText = 'Server error';
+  }
+}
+
+async function resetPassword(){
+  const username = document.getElementById('reset_username').value.trim();
+  const otp = document.getElementById('reset_otp').value.trim();
+  const newPass = document.getElementById('reset_password').value;
+  const msgEl = document.getElementById('resetMsg');
+  if(msgEl) msgEl.innerText = '';
+
+  if(!username || !otp || !newPass){
+    if(msgEl) msgEl.innerText = 'All fields required';
+    return;
+  }
+
+  try{
+    const res = await fetch('/reset-password',{
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ username, otp, newPassword: newPass })
+    });
+    const data = await res.json();
+    if(!res.ok){
+      if(msgEl) msgEl.innerText = data.message || 'Failed';
+      return;
+    }
+
+    if(msgEl) msgEl.innerText = data.message || 'Password updated';
+    setTimeout(() => {
+      hideAllForms();
+    }, 2000);
+
+  }catch(err){
+    if(msgEl) msgEl.innerText = 'Server error';
+  }
+}
+
 
 
 async function searchMed(){
@@ -263,6 +358,121 @@ async function checkStock(){
 
   } catch (err){
     alertBox.innerHTML = "⚠ Unable to fetch stock data";
+  }
+}
+
+// ================= BILLING: SEARCH MEDICINE =================
+
+
+// ================= INVENTORY MANAGEMENT (admin) =================
+
+async function loadInventory() {
+  const list = document.getElementById('inventoryList');
+  if (!list) return;
+  list.innerHTML = 'Loading…';
+  try {
+    const res = await fetch('/medicines');
+    const meds = await res.json();
+    renderInventoryTable(meds);
+  } catch (err) {
+    list.innerHTML = '<p>Error loading inventory</p>';
+  }
+}
+
+function renderInventoryTable(meds) {
+  const list = document.getElementById('inventoryList');
+  if (!list) return;
+  if (meds.length === 0) {
+    list.innerHTML = '<p>No medicines found</p>';
+    return;
+  }
+  let html = '<table style="width:100%;border-collapse:collapse;">';
+  html += '<tr style="background:#f3f4f6;font-weight:bold;">'
+       +'<th style="padding:10px;">Name</th>'
+       +'<th style="padding:10px;">Company</th>'
+       +'<th style="padding:10px;">Price</th>'
+       +'<th style="padding:10px;">Quantity</th>'
+       +'<th style="padding:10px;">Location</th>'
+       +'<th style="padding:10px;">Actions</th>'
+       +'</tr>';
+  meds.forEach(m => {
+    const loc = (m.rack||'') + '-' + (m.shelf||'');
+    html += `<tr style="border-bottom:1px solid #ddd;">
+      <td style="padding:10px;">${m.name}</td>
+      <td style="padding:10px;">${m.company||''}</td>
+      <td style="padding:10px;">${m.price||0}</td>
+      <td style="padding:10px;">${m.quantity||0}</td>
+      <td style="padding:10px;">${loc}</td>
+      <td style="padding:10px;"><button class="secondary-btn" onclick="promptRestock('${m._id}','${m.name}',${m.quantity||0})">Add Stock</button></td>
+     </tr>`;
+  });
+  html += '</table>';
+  list.innerHTML = html;
+}
+
+function promptRestock(id,name,current) {
+  const amt = prompt(`Add stock for ${name}. Current: ${current}\nEnter amount:`,'');
+  if(!amt) return;
+  const n = parseInt(amt);
+  if(isNaN(n) || n<=0) {
+    alert('Invalid amount');
+    return;
+  }
+  restockMedicine(id,n);
+}
+
+async function restockMedicine(id, amount) {
+  try {
+    const res = await fetch(`/medicines/${id}/increase`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ amount })
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      alert(data.message || 'Failed to add stock');
+      return;
+    }
+    loadInventory();
+    loadDashboard(); // update totals
+  } catch(err){
+    alert('Server error');
+  }
+}
+
+function showAddMedicineForm(){
+  document.getElementById('addMedPanel').style.display = 'block';
+}
+function hideAddMedicineForm(){
+  document.getElementById('addMedPanel').style.display = 'none';
+  document.getElementById('addMedMsg').innerText = '';
+  document.getElementById('addMedForm').reset();
+}
+
+async function submitNewMedicine(e){
+  e.preventDefault();
+  const name = document.getElementById('med_name').value.trim();
+  const company = document.getElementById('med_company').value.trim();
+  const price = parseFloat(document.getElementById('med_price').value) || 0;
+  const quantity = parseInt(document.getElementById('med_quantity').value) || 0;
+  const rack = document.getElementById('med_rack').value.trim();
+  const shelf = document.getElementById('med_shelf').value.trim();
+  const msg = document.getElementById('addMedMsg');
+  try{
+    const res = await fetch('/medicines', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ name, company, price, quantity, rack, shelf })
+    });
+    const data = await res.json();
+    if(!res.ok) {
+      msg.innerText = data.message || 'Failed to add';
+      return;
+    }
+    msg.innerText = 'Medicine added';
+    loadInventory();
+    loadDashboard();
+    setTimeout(hideAddMedicineForm,1200);
+  }catch(err){
+    msg.innerText = 'Server error';
   }
 }
 

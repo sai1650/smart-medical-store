@@ -39,6 +39,9 @@
       <input id="password" type="password" placeholder="Password" autocomplete="current-password">
       <button onclick="login()">Sign In</button>
       <p id="msg" class="error-msg"></p>
+      <p style="margin-top:8px; font-size:0.95rem; color:#666;">
+        <a href="#" onclick="showForgotForm();return false;">Forgot password?</a>
+      </p>
       <p style="margin-top:16px; font-size:0.95rem; color:#666;">New staff? <a href="#" id="showRegisterLink" onclick="toggleRegister(true);return false;">Register here</a></p>
     </div>
 
@@ -50,6 +53,23 @@
       <button onclick="registerStaff()">Create Account</button>
       <p id="registerMsg" class="error-msg"></p>
       <p style="margin-top:16px; font-size:0.95rem; color:#666;">Already have an account? <a href="#" onclick="toggleRegister(false);return false;">Sign in</a></p>
+    </div>
+
+    <!-- Forgot password flow -->
+    <div id="forgotForm" style="display:none;">
+      <input id="forgot_username" placeholder="Username" autocomplete="username">
+      <button onclick="sendOTP()">Send OTP</button>
+      <p id="forgotMsg" class="error-msg"></p>
+      <p style="margin-top:16px; font-size:0.95rem; color:#666;"><a href="#" onclick="hideAllForms();return false;">Back to login</a></p>
+    </div>
+
+    <div id="resetForm" style="display:none;">
+      <input id="reset_username" placeholder="Username" autocomplete="username">
+      <input id="reset_otp" placeholder="Enter OTP">
+      <input id="reset_password" type="password" placeholder="New password" autocomplete="new-password">
+      <button onclick="resetPassword()">Reset Password</button>
+      <p id="resetMsg" class="error-msg"></p>
+      <p style="margin-top:16px; font-size:0.95rem; color:#666;"><a href="#" onclick="hideAllForms();return false;">Back to login</a></p>
     </div>
   </div>
 
