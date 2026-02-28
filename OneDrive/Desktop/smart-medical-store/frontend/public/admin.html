@@ -387,7 +387,7 @@ async function loadAttendanceStaff() {
     staff.forEach(s => {
       const option = document.createElement("option");
       option.value = s._id;
-      option.textContent = `${s.name || s.username} (${s.username})`;
+      option.textContent = s.name || s.username;
       select.appendChild(option);
     });
   } catch (err) {
