@@ -441,7 +441,7 @@ app.post("/attendance/mark", async (req, res) => {
     
     // Get user info for username
     const user = await User.findById(user_id);
-    console.log("User found:", user);
+    console.log("User found:", user ? user.username : "NOT FOUND");
     
     if (!user) {
       return res.status(404).json({ success: false, message: "User not found" });
@@ -449,23 +449,22 @@ app.post("/attendance/mark", async (req, res) => {
     
     const today = new Date();
     const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0, 0);
-    const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59, 999);
     
-    console.log("Date range:", startOfDay, "to", endOfDay);
+    console.log("Querying for date:", startOfDay);
     
     let attendance = await Attendance.findOne({
       user_id: user_id,
-      date: { $gte: startOfDay, $lte: endOfDay }
+      date: startOfDay
     });
     
-    console.log("Existing attendance:", attendance);
+    console.log("Existing attendance found:", !!attendance);
     
     if (attendance) {
       // Update existing record
       attendance.status = status;
       attendance.check_in = new Date();
       await attendance.save();
-      console.log("Updated attendance:", attendance);
+      console.log("Updated attendance record");
     } else {
       // Create new record
       attendance = new Attendance({
@@ -476,12 +475,13 @@ app.post("/attendance/mark", async (req, res) => {
         check_in: new Date()
       });
       await attendance.save();
-      console.log("Created new attendance:", attendance);
+      console.log("Created new attendance record");
     }
     
     res.json({ success: true, message: "Attendance marked successfully", attendance });
   } catch (err) {
-    console.error("Attendance marking error:", err);
+    console.error("Attendance marking error:", err.message);
+    console.error("Error stack:", err.stack);
     res.status(500).json({ success: false, message: "Failed to mark attendance: " + err.message });
   }
 });
@@ -678,6 +678,24 @@ async function seedDatabase() {
     console.log("Seed data error:", err.message);
   }
 }
+
+// DEBUG: Check attendance collection
+app.get("/debug-attendance", async (req, res) => {
+  try {
+    const allAttendance = await Attendance.find().limit(10);
+    const todayStart = new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate(), 0, 0, 0, 0);
+    const todayAttendance = await Attendance.find({ date: todayStart });
+    
+    res.json({ 
+      totalRecords: await Attendance.countDocuments(),
+      sampleRecords: allAttendance,
+      todayAttendance: todayAttendance,
+      queryDate: todayStart
+    });
+  } catch (err) {
+    res.json({ error: err.message });
+  }
+});
 
 // Seed after connection
 setTimeout(() => seedDatabase(), 1000);
