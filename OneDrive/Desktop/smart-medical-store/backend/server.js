@@ -428,6 +428,8 @@ app.post("/attendance/mark", async (req, res) => {
   try {
     const { user_id, status } = req.body;
     
+    console.log("Marking attendance - user_id:", user_id, "status:", status);
+    
     if (!user_id || !status) {
       return res.status(400).json({ success: false, message: "Missing required fields" });
     }
@@ -439,6 +441,8 @@ app.post("/attendance/mark", async (req, res) => {
     
     // Get user info for username
     const user = await User.findById(user_id);
+    console.log("User found:", user);
+    
     if (!user) {
       return res.status(404).json({ success: false, message: "User not found" });
     }
@@ -447,16 +451,21 @@ app.post("/attendance/mark", async (req, res) => {
     const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0, 0);
     const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59, 999);
     
+    console.log("Date range:", startOfDay, "to", endOfDay);
+    
     let attendance = await Attendance.findOne({
       user_id: user_id,
       date: { $gte: startOfDay, $lte: endOfDay }
     });
+    
+    console.log("Existing attendance:", attendance);
     
     if (attendance) {
       // Update existing record
       attendance.status = status;
       attendance.check_in = new Date();
       await attendance.save();
+      console.log("Updated attendance:", attendance);
     } else {
       // Create new record
       attendance = new Attendance({
@@ -467,11 +476,12 @@ app.post("/attendance/mark", async (req, res) => {
         check_in: new Date()
       });
       await attendance.save();
+      console.log("Created new attendance:", attendance);
     }
     
     res.json({ success: true, message: "Attendance marked successfully", attendance });
   } catch (err) {
-    console.error("Attendance marking error:", err.message);
+    console.error("Attendance marking error:", err);
     res.status(500).json({ success: false, message: "Failed to mark attendance: " + err.message });
   }
 });
@@ -483,11 +493,10 @@ app.post("/attendance/checkin", async (req, res) => {
     
     const today = new Date();
     const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0, 0);
-    const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59, 999);
     
     let attendance = await Attendance.findOne({
-      user_id,
-      date: { $gte: startOfDay, $lte: endOfDay }
+      user_id: new mongoose.Types.ObjectId(user_id),
+      date: startOfDay
     });
     
     if (attendance) {
@@ -518,10 +527,9 @@ app.post("/attendance/checkout", async (req, res) => {
     
     const today = new Date();
     const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0, 0);
-    const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59, 999);
     
     const attendance = await Attendance.findOneAndUpdate(
-      { user_id, date: { $gte: startOfDay, $lte: endOfDay } },
+      { user_id: new mongoose.Types.ObjectId(user_id), date: startOfDay },
       { check_out: new Date() },
       { new: true }
     );
@@ -537,11 +545,10 @@ app.get("/attendance/:user_id/today", async (req, res) => {
   try {
     const today = new Date();
     const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0, 0);
-    const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59, 999);
     
     const attendance = await Attendance.findOne({
-      user_id: req.params.user_id,
-      date: { $gte: startOfDay, $lte: endOfDay }
+      user_id: new mongoose.Types.ObjectId(req.params.user_id),
+      date: startOfDay
     });
     
     if (attendance) {
@@ -558,6 +565,7 @@ app.get("/attendance/:user_id/today", async (req, res) => {
       });
     }
   } catch (err) {
+    console.error("Error getting today's attendance:", err);
     res.status(500).json({ marked: false });
   }
 });
@@ -565,11 +573,12 @@ app.get("/attendance/:user_id/today", async (req, res) => {
 // GET STAFF ATTENDANCE RECORDS
 app.get("/attendance/:user_id", async (req, res) => {
   try {
-    const records = await Attendance.find({ user_id: req.params.user_id })
+    const records = await Attendance.find({ user_id: new mongoose.Types.ObjectId(req.params.user_id) })
       .sort({ date: -1 })
       .limit(30);
     res.json(records);
   } catch (err) {
+    console.error("Error fetching attendance records:", err);
     res.status(500).json([]);
   }
 });
@@ -579,14 +588,18 @@ app.get("/attendance-report/today", async (req, res) => {
   try {
     const today = new Date();
     const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0, 0);
-    const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59, 999);
+    
+    console.log("Fetching attendance for today:", startOfDay);
     
     const records = await Attendance.find({
-      date: { $gte: startOfDay, $lte: endOfDay }
+      date: startOfDay
     }).sort({ check_in: -1 });
+    
+    console.log("Found records:", records.length);
     
     res.json(records);
   } catch (err) {
+    console.error("Error fetching today's attendance:", err);
     res.status(500).json([]);
   }
 });

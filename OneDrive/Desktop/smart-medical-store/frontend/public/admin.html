@@ -411,6 +411,8 @@ async function markStaffAttendance(status) {
   }
   
   try {
+    console.log("Marking attendance for staff:", staffId, "status:", status);
+    
     const res = await fetch("/attendance/mark", {
       method: "POST",
       headers: {"Content-Type":"application/json"},
@@ -420,7 +422,9 @@ async function markStaffAttendance(status) {
       })
     });
     
+    console.log("Response status:", res.status);
     const data = await res.json();
+    console.log("Response data:", data);
     
     if (data.success) {
       msg.style.color = "#10b981";
