@@ -9,7 +9,8 @@ const path = require('path');
 
 // Middleware
 app.use(cors());
-app.use(express.json());
+// allow larger JSON payloads to support base64 images (photos)
+app.use(express.json({ limit: '5mb' }));
 
 // Serve frontend static files (resolve absolute path)
 const frontendStatic = path.join(__dirname, '..', 'frontend', 'public');
@@ -33,6 +34,7 @@ const userSchema = new mongoose.Schema({
   name: String,
   email: String,
   phone: String,
+  photo: String, // base64 data URL or URL to avatar
   // fields used for password reset via OTP
   resetOTP: Number,
   otpExpiry: Date,
@@ -409,15 +411,20 @@ app.get("/staff/:id/profile", async (req, res) => {
 // UPDATE STAFF PROFILE
 app.put("/staff/:id/profile", async (req, res) => {
   try {
-    const { name, email, phone } = req.body;
+    const { name, email, phone, photo } = req.body;
+    const updateData = { name, email, phone };
+    if (photo !== undefined) updateData.photo = photo; // allow null/empty to clear
+
     const updated = await User.findByIdAndUpdate(
       req.params.id,
-      { name, email, phone },
+      updateData,
       { new: true }
     ).select("-password");
     res.json(updated);
   } catch (err) {
-    res.status(500).json({ message: "Update failed" });
+    console.error("Profile update error", err);
+    // return error details to help frontend
+    res.status(500).json({ message: "Update failed", error: err.message });
   }
 });
 
@@ -428,21 +435,33 @@ app.post("/attendance/mark", async (req, res) => {
   try {
     const { user_id, status } = req.body;
     
-    console.log("Marking attendance - user_id:", user_id, "status:", status);
+    console.log("=== ATTENDANCE MARK REQUEST ===");
+    console.log("user_id:", user_id, "type:", typeof user_id);
+    console.log("status:", status);
     
     if (!user_id || !status) {
+      console.log("Missing fields - user_id:", !!user_id, "status:", !!status);
       return res.status(400).json({ success: false, message: "Missing required fields" });
     }
     
     // Validate status
     if (!["present", "absent", "leave"].includes(status)) {
+      console.log("Invalid status:", status);
       return res.status(400).json({ success: false, message: "Invalid status" });
     }
     
-    // Get user info for username - use toString() to handle both string and ObjectId
-    const userId = new mongoose.Types.ObjectId(user_id);
+    let userId;
+    try {
+      userId = mongoose.Types.ObjectId.isValid(user_id) ? new mongoose.Types.ObjectId(user_id) : user_id;
+      console.log("Converted user_id to ObjectId:", userId);
+    } catch (e) {
+      console.log("Error converting user_id:", e.message);
+      return res.status(400).json({ success: false, message: "Invalid user ID format" });
+    }
+    
+    // Get user info for username
     const user = await User.findById(userId);
-    console.log("User found:", user ? user.username : "NOT FOUND");
+    console.log("User lookup result:", user ? `Found ${user.username}` : "NOT FOUND");
     
     if (!user) {
       return res.status(404).json({ success: false, message: "User not found" });
@@ -452,14 +471,14 @@ app.post("/attendance/mark", async (req, res) => {
     const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0, 0);
     const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59, 999);
     
-    console.log("Querying for user_id:", userId, "date range:", startOfDay, "to", endOfDay);
+    console.log("Date range: ", startOfDay, " to ", endOfDay);
     
     let attendance = await Attendance.findOne({
       user_id: userId,
       date: { $gte: startOfDay, $lte: endOfDay }
     });
     
-    console.log("Existing attendance found:", !!attendance);
+    console.log("Attendance record exists:", !!attendance);
     
     if (attendance) {
       // Update existing record
@@ -477,13 +496,15 @@ app.post("/attendance/mark", async (req, res) => {
         check_in: new Date()
       });
       await attendance.save();
-      console.log("Created new attendance record for:", user.username);
+      console.log("Created new attendance record");
     }
     
+    console.log("Success - returning record");
     res.json({ success: true, message: "Attendance marked successfully", attendance });
   } catch (err) {
-    console.error("Attendance marking error:", err.message);
-    console.error("Full error:", err);
+    console.error("=== ATTENDANCE ERROR ===");
+    console.error("Message:", err.message);
+    console.error("Stack:", err.stack);
     res.status(500).json({ success: false, message: "Failed to mark attendance: " + err.message });
   }
 });
@@ -706,8 +727,13 @@ app.get("/debug-attendance", async (req, res) => {
 // Seed after connection
 setTimeout(() => seedDatabase(), 1000);
 
-// START SERVER
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`✅ Server running on http://localhost:${PORT}`);
-});
+// START SERVER (only for local development)
+if (require.main === module) {
+  const PORT = process.env.PORT || 3000;
+  app.listen(PORT, () => {
+    console.log(`✅ Server running on http://localhost:${PORT}`);
+  });
+}
+
+// Export for Vercel
+module.exports = app;

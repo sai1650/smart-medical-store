@@ -231,11 +231,16 @@ async function loadStaff() {
     }
     
     let html = "<table style='width:100%; border-collapse:collapse;'>";
-    html += "<tr style='background:#f3f4f6; font-weight:bold;'><th style='padding:10px; text-align:left; border-bottom:1px solid #ddd;'>Name</th><th style='padding:10px; text-align:left; border-bottom:1px solid #ddd;'>Username</th><th style='padding:10px; text-align:left; border-bottom:1px solid #ddd;'>Email</th><th style='padding:10px; text-align:left; border-bottom:1px solid #ddd;'>Phone</th><th style='padding:10px; text-align:left; border-bottom:1px solid #ddd;'>Joined</th></tr>";
+    html += "<tr style='background:#f3f4f6; font-weight:bold;'><th style='padding:10px; text-align:left; border-bottom:1px solid #ddd;'>Photo</th><th style='padding:10px; text-align:left; border-bottom:1px solid #ddd;'>Name</th><th style='padding:10px; text-align:left; border-bottom:1px solid #ddd;'>Username</th><th style='padding:10px; text-align:left; border-bottom:1px solid #ddd;'>Email</th><th style='padding:10px; text-align:left; border-bottom:1px solid #ddd;'>Phone</th><th style='padding:10px; text-align:left; border-bottom:1px solid #ddd;'>Joined</th></tr>";
     
     staff.forEach(s => {
       const date = new Date(s.created_at).toLocaleDateString();
+      let photoHtml = '';
+      if (s.photo) {
+        photoHtml = `<img src="${s.photo}" style="width:32px;height:32px;border-radius:50%;object-fit:cover;">`;
+      }
       html += `<tr style='border-bottom:1px solid #ddd;'>
+        <td style='padding:10px;'>${photoHtml}</td>
         <td style='padding:10px;'>${s.name || "-"}</td>
         <td style='padding:10px;'>${s.username}</td>
         <td style='padding:10px;'>${s.email || "-"}</td>
@@ -411,18 +416,30 @@ async function markStaffAttendance(status) {
   }
   
   try {
-    console.log("Marking attendance for staff:", staffId, "status:", status);
+    console.log("=== MARKING ATTENDANCE ===");
+    console.log("Staff ID:", staffId);
+    console.log("Status:", status);
+    
+    const reqBody = {
+      user_id: staffId,
+      status: status
+    };
+    
+    console.log("Request body:", JSON.stringify(reqBody));
     
     const res = await fetch("/attendance/mark", {
       method: "POST",
       headers: {"Content-Type":"application/json"},
-      body: JSON.stringify({
-        user_id: staffId,
-        status: status
-      })
+      body: JSON.stringify(reqBody)
     });
     
     console.log("Response status:", res.status);
+    console.log("Response OK:", res.ok);
+    
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+    }
+    
     const data = await res.json();
     console.log("Response data:", data);
     
@@ -442,8 +459,8 @@ async function markStaffAttendance(status) {
     }
   } catch (err) {
     msg.style.color = "#ef4444";
-    msg.innerText = "✗ Error marking attendance";
-    console.error("Error:", err);
+    msg.innerText = "✗ Error marking attendance: " + err.message;
+    console.error("=== ERROR ===", err);
   }
 }
 

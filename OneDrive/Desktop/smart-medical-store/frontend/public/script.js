@@ -1,6 +1,7 @@
 document.addEventListener("DOMContentLoaded", (ploy ) => {
 
   // ===== SEARCH BUTTON =====
+  const API = "https://YOUR-BACKEND.onrender.com";
   const btn = document.getElementById("searchBtn");
   if (btn) btn.addEventListener("click", searchMed);
 
@@ -330,6 +331,7 @@ function clearHighlights(){
 
 
 // ================= LOW STOCK =================
+let lowStockAlertShown = false; // flag so popup appears once
 async function checkStock(){
 
   const alertBox = document.getElementById("alert");
@@ -353,8 +355,11 @@ async function checkStock(){
       </ul>
     `;
 
-    // popup notification
-    alert("⚠ Low stock medicines detected!");
+    // popup notification (only one time per session)
+    if (!lowStockAlertShown) {
+      alert("⚠ Low stock medicines detected!");
+      lowStockAlertShown = true;
+    }
 
   } catch (err){
     alertBox.innerHTML = "⚠ Unable to fetch stock data";
